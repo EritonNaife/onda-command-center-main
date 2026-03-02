@@ -1,12 +1,17 @@
 import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { X } from 'lucide-react';
 import { LiveDashboardIncident } from '@/types/dashboard';
 
 interface IncidentFeedProps {
   incidents: LiveDashboardIncident[];
+  onDismissAlert?: (alertId: string) => void;
 }
 
-export const IncidentFeed = ({ incidents }: IncidentFeedProps) => {
+export const IncidentFeed = ({
+  incidents,
+  onDismissAlert,
+}: IncidentFeedProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -56,6 +61,16 @@ export const IncidentFeed = ({ incidents }: IncidentFeedProps) => {
             <div className="flex-1">
               <span className="text-foreground/90">{inc.message}</span>
             </div>
+            {inc.alertId && onDismissAlert && (
+              <button
+                type="button"
+                onClick={() => onDismissAlert(inc.alertId!)}
+                className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+                aria-label={`Dismiss alert: ${inc.message}`}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
             <span className="shrink-0 font-mono text-muted-foreground">{inc.time}</span>
           </div>
         ))}

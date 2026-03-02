@@ -9,6 +9,7 @@ import {
   TableRow,
   TableCell,
 } from '@/components/ui/table';
+import { getEventRoute } from '@/lib/eventRouting';
 import type { UpcomingEvent } from '@/types/dashboard';
 
 interface UpcomingEventsTableProps {
@@ -58,7 +59,13 @@ export const UpcomingEventsTable = ({ events }: UpcomingEventsTableProps) => {
               <TableRow
                 key={event.id}
                 className="cursor-pointer border-white/[0.06] transition-colors hover:bg-white/[0.04]"
-                onClick={() => navigate(`/events/${event.id}`)}
+                onClick={() =>
+                  navigate(
+                    getEventRoute(event.id, {
+                      status: event.status,
+                    }),
+                  )
+                }
               >
                 <TableCell className="font-medium text-foreground">
                   {event.name}

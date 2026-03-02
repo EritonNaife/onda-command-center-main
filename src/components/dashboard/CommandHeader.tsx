@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuthStore } from '@/stores/authStore';
 import { EventSwitcherOption, LiveDashboardEvent } from '@/types/dashboard';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, LogOut } from 'lucide-react';
-import { OrgSwitcher } from '@/components/auth/OrgSwitcher';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ChevronDown } from 'lucide-react';
+import { getEventRoute } from '@/lib/eventRouting';
 
 interface CommandHeaderProps {
   event: LiveDashboardEvent;
@@ -14,8 +12,6 @@ interface CommandHeaderProps {
 
 export const CommandHeader = ({ event, eventOptions }: CommandHeaderProps) => {
   const navigate = useNavigate();
-  const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [showWallet, setShowWallet] = useState(false);
 
@@ -29,7 +25,7 @@ export const CommandHeader = ({ event, eventOptions }: CommandHeaderProps) => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: 0.1 }}
     >
-      {/* Left: Event Switcher + Org + Live Badge */}
+      {/* Left: Event Switcher + Live Badge */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative">
           <button
@@ -53,7 +49,12 @@ export const CommandHeader = ({ event, eventOptions }: CommandHeaderProps) => {
                   <button
                     key={ev.id}
                     onClick={() => {
-                      navigate(`/events/${ev.id}`);
+                      navigate(
+                        getEventRoute(ev.id, {
+                          status: ev.status,
+                          isLive: ev.isLive,
+                        }),
+                      );
                       setShowSwitcher(false);
                     }}
                     className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-white/[0.06] ${
@@ -71,8 +72,6 @@ export const CommandHeader = ({ event, eventOptions }: CommandHeaderProps) => {
           </AnimatePresence>
         </div>
 
-        <OrgSwitcher />
-
         {event.isLive && (
           <span className="glass-pill text-xs font-semibold uppercase tracking-widest text-emerald-400">
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse-subtle" />
@@ -81,7 +80,7 @@ export const CommandHeader = ({ event, eventOptions }: CommandHeaderProps) => {
         )}
       </div>
 
-      {/* Right: Wallet + User */}
+      {/* Right: Wallet */}
       <div className="flex items-center gap-3">
         <div
           className="relative"
@@ -121,26 +120,6 @@ export const CommandHeader = ({ event, eventOptions }: CommandHeaderProps) => {
             )}
           </AnimatePresence>
         </div>
-
-        {/* User Avatar + Logout */}
-        {user && (
-          <div className="flex items-center gap-2">
-            <Avatar className="h-8 w-8 border border-white/[0.08]">
-              <AvatarFallback className="bg-primary/20 text-xs font-semibold text-primary">
-                {user.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
-              </AvatarFallback>
-            </Avatar>
-            <button
-              onClick={() => {
-                void logout();
-              }}
-              className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
-              aria-label="Sign out"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
-        )}
       </div>
     </motion.div>
   );

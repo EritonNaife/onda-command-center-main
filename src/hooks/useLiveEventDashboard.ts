@@ -1,5 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
-import { apiGet } from '@/lib/apiClient';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { API_BASE_URL } from '@/lib/apiBaseUrl';
+import { apiClient, apiGet } from '@/lib/apiClient';
 import { useAuthStore } from '@/stores/authStore';
 import {
   LiveDashboardIncident,
@@ -28,6 +30,7 @@ function buildRiskAlerts(snapshot: LiveEventSnapshot): LiveDashboardRiskAlert[] 
     message: alert.message,
     level: alert.severity,
     icon: alert.severity === 'critical' ? '!' : '!',
+    alertId: alert.id,
   }));
 
   if (snapshot.dataSourceStatus.moveApi !== 'ok') {
@@ -61,6 +64,7 @@ function buildIncidents(
       message: alert.message,
       level: alert.severity === 'critical' ? 'warning' : 'info',
       time: formatMinutesAgo(alert.triggered_at),
+      alertId: alert.id,
     }),
   );
 
@@ -174,16 +178,132 @@ function toViewModel(snapshot: LiveEventSnapshot): LiveDashboardViewModel {
   };
 }
 
+function extractSsePayload(chunk: string): string | null {
+  const dataLines = chunk
+    .split('\n')
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trimStart());
+
+  if (dataLines.length === 0) {
+    return null;
+  }
+
+  return dataLines.join('\n');
+}
+
+async function streamLiveEventDashboard(
+  eventId: string,
+  signal: AbortSignal,
+  onSnapshot: (snapshot: LiveEventSnapshot) => void,
+): Promise<void> {
+  const response = await apiClient(`${API_BASE_URL}/live/${eventId}/stream`, {
+    headers: {
+      Accept: 'text/event-stream',
+      'Cache-Control': 'no-cache',
+    },
+    signal,
+  });
+
+  if (!response.ok) {
+    const message = (await response.text()) || 'Unable to open live stream.';
+    throw new Error(message);
+  }
+
+  if (!response.body) {
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (!signal.aborted) {
+    const { value, done } = await reader.read();
+
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+    const chunks = buffer.split('\n\n');
+    buffer = chunks.pop() ?? '';
+
+    for (const chunk of chunks) {
+      const payload = extractSsePayload(chunk);
+
+      if (!payload) {
+        continue;
+      }
+
+      try {
+        onSnapshot(JSON.parse(payload) as LiveEventSnapshot);
+      } catch {
+        // Ignore malformed SSE payloads and keep the stream open.
+      }
+    }
+  }
+}
+
+export function getLiveEventDashboardQueryKey(
+  organizationId?: string | null,
+  eventId?: string,
+) {
+  return ['live-event-dashboard', organizationId ?? null, eventId ?? null] as const;
+}
+
 export function useLiveEventDashboard(eventId?: string) {
   const org = useAuthStore((s) => s.org);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const queryClient = useQueryClient();
+  const organizationId = org?.id;
+  const queryKey = getLiveEventDashboardQueryKey(organizationId, eventId);
+
+  useEffect(() => {
+    if (!isAuthenticated || !organizationId || !eventId || !accessToken) {
+      return;
+    }
+
+    const controller = new AbortController();
+    let reconnectTimer: number | undefined;
+    let stopped = false;
+    const liveQueryKey = getLiveEventDashboardQueryKey(organizationId, eventId);
+
+    const connect = async () => {
+      try {
+        await streamLiveEventDashboard(eventId, controller.signal, (snapshot) => {
+          queryClient.setQueryData<LiveEventSnapshot>(liveQueryKey, snapshot);
+        });
+      } catch {
+        if (controller.signal.aborted || stopped) {
+          return;
+        }
+      }
+
+      if (!controller.signal.aborted && !stopped) {
+        reconnectTimer = window.setTimeout(() => {
+          void connect();
+        }, 3000);
+      }
+    };
+
+    void connect();
+
+    return () => {
+      stopped = true;
+      controller.abort();
+
+      if (reconnectTimer !== undefined) {
+        window.clearTimeout(reconnectTimer);
+      }
+    };
+  }, [accessToken, eventId, isAuthenticated, organizationId, queryClient]);
 
   return useQuery<LiveEventSnapshot, Error, LiveDashboardViewModel>({
-    queryKey: ['live-event-dashboard', org?.id, eventId],
+    queryKey,
     queryFn: () => apiGet<LiveEventSnapshot>(`/live/${eventId}`),
     enabled: isAuthenticated && !!org && !!eventId,
     staleTime: 10_000,
-    refetchInterval: 15_000,
     select: toViewModel,
   });
 }

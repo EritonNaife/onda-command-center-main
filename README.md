@@ -51,23 +51,28 @@ src/
 ├── App.tsx                   # Router and providers
 ├── index.css                 # Global styles and CSS variables
 ├── pages/
-│   ├── Index.tsx             # Main dashboard page
+│   ├── Overview.tsx          # Organization overview
+│   ├── Events.tsx            # Paginated events list
+│   ├── EventDetail.tsx       # Event detail + edit flow
+│   ├── Index.tsx             # Live event dashboard
 │   └── NotFound.tsx          # 404 page
 ├── components/
+│   ├── layout/               # Shared authenticated shell
 │   ├── dashboard/            # Dashboard panel components
-│   │   ├── RiskStrip.tsx
-│   │   ├── CommandHeader.tsx
-│   │   ├── MomentumEngine.tsx
-│   │   ├── CrowdControl.tsx
-│   │   ├── FinancePanel.tsx
-│   │   ├── IncidentFeed.tsx
-│   │   └── SimulationToggles.tsx
+│   ├── overview/             # Overview page widgets
+│   ├── auth/                 # Session and org guard UI
 │   └── ui/                   # shadcn/ui component library
 ├── stores/
-│   └── eventStore.ts         # Zustand store and mock data
+│   └── authStore.ts          # Session state + org context
 ├── hooks/
+│   ├── useDashboardOverview.ts
+│   ├── useEvents.ts
+│   ├── useEventDetail.ts
+│   ├── useLiveEventDashboard.ts
 │   └── use-toast.ts
 └── lib/
+    ├── apiClient.ts
+    ├── eventRouting.ts
     └── utils.ts
 ```
 

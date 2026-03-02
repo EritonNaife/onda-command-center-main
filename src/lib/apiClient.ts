@@ -55,3 +55,26 @@ export async function apiGet<T>(path: string): Promise<T> {
   }
   return response.json();
 }
+
+export async function apiPatch<TResponse, TBody>(
+  path: string,
+  body: TBody,
+): Promise<TResponse> {
+  const response = await apiClient(`${API_BASE_URL}${path}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new ApiError(response.status, await response.text());
+  }
+
+  if (response.status === 204) {
+    return undefined as TResponse;
+  }
+
+  return response.json();
+}

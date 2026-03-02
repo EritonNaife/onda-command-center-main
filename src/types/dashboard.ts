@@ -138,6 +138,7 @@ export interface LiveDashboardRiskAlert {
   message: string;
   level: 'normal' | 'warning' | 'critical';
   icon: string;
+  alertId?: string;
 }
 
 export interface LiveDashboardIncident {
@@ -145,6 +146,7 @@ export interface LiveDashboardIncident {
   message: string;
   level: 'success' | 'warning' | 'info';
   time: string;
+  alertId?: string;
 }
 
 export interface LiveDashboardPayoutLog {
