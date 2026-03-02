@@ -1,15 +1,22 @@
 import { motion } from 'framer-motion';
-import { useEventStore, useCurrentEvent } from '@/stores/eventStore';
+import { LiveDashboardEvent } from '@/types/dashboard';
 
-export const CrowdControl = () => {
-  const event = useCurrentEvent();
-  const simulation = useEventStore((s) => s.simulation);
+interface CrowdControlProps {
+  event: LiveDashboardEvent;
+}
 
-  const entryPct = Math.round((event.entryCount / event.totalCapacity) * 100);
+export const CrowdControl = ({ event }: CrowdControlProps) => {
+
+  const entryPct =
+    event.totalCapacity > 0
+      ? Math.round((event.entryCount / event.totalCapacity) * 100)
+      : 0;
   const circumference = 2 * Math.PI * 80;
   const strokeDashoffset = circumference - (entryPct / 100) * circumference;
 
-  const isBottleneck = simulation.gateSlowdown;
+  const isBottleneck =
+    event.riskAlerts.some((alert) => alert.id.includes('entry')) ||
+    event.entryRate <= 10;
   const ringColor = isBottleneck ? 'stroke-amber-400' : 'stroke-primary';
   const glowClass = isBottleneck ? 'glow-gold' : 'glow-teal';
 

@@ -1,16 +1,30 @@
 import { motion } from 'framer-motion';
-import { useEventStore } from '@/stores/eventStore';
+import { LiveEventDataSourceStatus } from '@/types/dashboard';
 
-const toggles = [
-  { key: 'refundSpike' as const, label: 'Refund Spike', icon: '💸' },
-  { key: 'gateSlowdown' as const, label: 'Gate Slowdown', icon: '🚧' },
-  { key: 'apiLatency' as const, label: 'API Latency', icon: '📡' },
-  { key: 'highEntryRate' as const, label: 'High Entry Rate', icon: '🏃' },
-];
+interface SimulationTogglesProps {
+  dataSourceStatus: LiveEventDataSourceStatus;
+  alertCount: number;
+  lastUpdated: string;
+}
 
-export const SimulationToggles = () => {
-  const simulation = useEventStore((s) => s.simulation);
-  const toggle = useEventStore((s) => s.toggleSimulation);
+const statusClass: Record<LiveEventDataSourceStatus['moveApi'], string> = {
+  ok: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-400',
+  stale: 'border-amber-400/20 bg-amber-400/10 text-amber-400',
+  error: 'border-red-400/20 bg-red-400/10 text-red-400',
+};
+
+export const SimulationToggles = ({
+  dataSourceStatus,
+  alertCount,
+  lastUpdated,
+}: SimulationTogglesProps) => {
+  const updatedAt = new Date(lastUpdated);
+  const updateLabel = Number.isNaN(updatedAt.getTime())
+    ? 'Unknown'
+    : updatedAt.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+      });
 
   return (
     <motion.div
@@ -20,29 +34,29 @@ export const SimulationToggles = () => {
       transition={{ duration: 0.5, delay: 0.6 }}
     >
       <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        Simulations
+        System Signals
       </h3>
       <div className="flex flex-wrap gap-2">
-        {toggles.map((t) => {
-          const active = simulation[t.key];
-          return (
-            <button
-              key={t.key}
-              onClick={() => toggle(t.key)}
-              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium transition-all ${
-                active
-                  ? 'border border-amber-400/30 bg-amber-400/10 text-amber-400'
-                  : 'border border-white/[0.08] bg-white/[0.03] text-muted-foreground hover:bg-white/[0.06]'
-              }`}
-              aria-pressed={active}
-              aria-label={`Toggle ${t.label} simulation`}
-            >
-              <span>{t.icon}</span>
-              <span>{t.label}</span>
-            </button>
-          );
-        })}
+        <div
+          className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium ${statusClass[dataSourceStatus.moveApi]}`}
+        >
+          <span>●</span>
+          <span>Move API: {dataSourceStatus.moveApi}</span>
+        </div>
+        <div
+          className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium ${statusClass[dataSourceStatus.paymentsApi]}`}
+        >
+          <span>●</span>
+          <span>Payments: {dataSourceStatus.paymentsApi}</span>
+        </div>
+        <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-xs font-medium text-muted-foreground">
+          <span>{alertCount}</span>
+          <span>Active Alerts</span>
+        </div>
       </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Last snapshot: {updateLabel}
+      </p>
     </motion.div>
   );
 };

@@ -5,6 +5,9 @@ import path from "path";
 export default defineConfig({
   server: {
     host: "::",
+    proxy: {
+      "/api": "http://localhost:5004",
+    },
     port: 8080,
     strictPort: true, // ADD THIS — Tauri needs the port to be exact
     hmr: {

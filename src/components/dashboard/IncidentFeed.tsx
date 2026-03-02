@@ -1,9 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { useCurrentEvent } from '@/stores/eventStore';
+import { LiveDashboardIncident } from '@/types/dashboard';
 
-export const IncidentFeed = () => {
-  const event = useCurrentEvent();
+interface IncidentFeedProps {
+  incidents: LiveDashboardIncident[];
+}
+
+export const IncidentFeed = ({ incidents }: IncidentFeedProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,7 +37,7 @@ export const IncidentFeed = () => {
         role="log"
         aria-label="Incident feed"
       >
-        {[...event.incidents, ...event.incidents].map((inc, i) => (
+        {[...incidents, ...incidents].map((inc, i) => (
           <div
             key={`${inc.id}-${i}`}
             className="flex items-start gap-2 rounded-lg border border-white/[0.04] bg-white/[0.02] px-3 py-2 text-xs"

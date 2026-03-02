@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEventStore, useCurrentEvent } from '@/stores/eventStore';
 import { useAuthStore } from '@/stores/authStore';
+import { EventSwitcherOption, LiveDashboardEvent } from '@/types/dashboard';
+import { useNavigate } from 'react-router-dom';
 import { ChevronDown, LogOut } from 'lucide-react';
 import { OrgSwitcher } from '@/components/auth/OrgSwitcher';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
-export const CommandHeader = () => {
-  const event = useCurrentEvent();
-  const events = useEventStore((s) => s.events);
-  const currentEventId = useEventStore((s) => s.currentEventId);
-  const setCurrentEvent = useEventStore((s) => s.setCurrentEvent);
+interface CommandHeaderProps {
+  event: LiveDashboardEvent;
+  eventOptions: EventSwitcherOption[];
+}
+
+export const CommandHeader = ({ event, eventOptions }: CommandHeaderProps) => {
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const [showSwitcher, setShowSwitcher] = useState(false);
@@ -46,15 +49,15 @@ export const CommandHeader = () => {
                 exit={{ opacity: 0, y: -8, scale: 0.96 }}
                 className="absolute left-0 top-full z-50 mt-2 min-w-[260px] overflow-hidden rounded-xl border border-white/[0.08] bg-card/95 backdrop-blur-xl"
               >
-                {events.map((ev) => (
+                {eventOptions.map((ev) => (
                   <button
                     key={ev.id}
                     onClick={() => {
-                      setCurrentEvent(ev.id);
+                      navigate(`/events/${ev.id}`);
                       setShowSwitcher(false);
                     }}
                     className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-white/[0.06] ${
-                      ev.id === currentEventId ? 'bg-white/[0.04] text-primary' : 'text-foreground'
+                      ev.id === event.id ? 'bg-white/[0.04] text-primary' : 'text-foreground'
                     }`}
                   >
                     {ev.isLive && (

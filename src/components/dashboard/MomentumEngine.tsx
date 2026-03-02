@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useCurrentEvent } from '@/stores/eventStore';
+import { LiveDashboardEvent } from '@/types/dashboard';
 import {
   AreaChart,
   Area,
@@ -10,8 +10,11 @@ import {
   ReferenceLine,
 } from 'recharts';
 
-export const MomentumEngine = () => {
-  const event = useCurrentEvent();
+interface MomentumEngineProps {
+  event: LiveDashboardEvent;
+}
+
+export const MomentumEngine = ({ event }: MomentumEngineProps) => {
 
   const formatMZN = (n: number) =>
     new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n);

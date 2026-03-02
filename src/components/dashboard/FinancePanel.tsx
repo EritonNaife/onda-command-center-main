@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useCurrentEvent } from '@/stores/eventStore';
+import { LiveDashboardEvent } from '@/types/dashboard';
 
-export const FinancePanel = () => {
-  const event = useCurrentEvent();
+interface FinancePanelProps {
+  event: LiveDashboardEvent;
+}
+
+export const FinancePanel = ({ event }: FinancePanelProps) => {
   const [payoutPct, setPayoutPct] = useState(50);
 
   const formatMZN = (n: number) =>
@@ -146,7 +149,10 @@ export const FinancePanel = () => {
           <p className="data-label">Channel ROI</p>
           <div className="space-y-3">
             {event.channelROI.map((ch) => {
-              const maxRev = Math.max(...event.channelROI.map((c) => c.revenue));
+              const maxRev = Math.max(
+                1,
+                ...event.channelROI.map((c) => c.revenue),
+              );
               const barWidth = Math.round((ch.revenue / maxRev) * 100);
               return (
                 <div key={ch.name} className="space-y-1">

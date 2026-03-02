@@ -1,9 +1,11 @@
 import { motion } from 'framer-motion';
-import { useCurrentEvent } from '@/stores/eventStore';
+import { LiveDashboardRiskAlert } from '@/types/dashboard';
 
-export const RiskStrip = () => {
-  const event = useCurrentEvent();
-  const alerts = event.riskAlerts;
+interface RiskStripProps {
+  alerts: LiveDashboardRiskAlert[];
+}
+
+export const RiskStrip = ({ alerts }: RiskStripProps) => {
 
   const worstLevel = alerts.reduce((worst, a) => {
     if (a.level === 'critical') return 'critical';
