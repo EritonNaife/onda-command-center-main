@@ -1,14 +1,12 @@
 import { useAuthStore } from '@/stores/authStore';
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:5004';
+import { API_BASE_URL } from '@/lib/apiBaseUrl';
 
 interface RequestOptions extends RequestInit {
   skipAuth?: boolean;
 }
 
 export async function apiClient(url: string, options: RequestOptions = {}): Promise<Response> {
-  const { accessToken, org, refreshTokens, logout } = useAuthStore.getState();
+  const { accessToken, org } = useAuthStore.getState();
   const { skipAuth, ...fetchOptions } = options;
 
   const headers = new Headers(fetchOptions.headers);
@@ -23,13 +21,13 @@ export async function apiClient(url: string, options: RequestOptions = {}): Prom
 
   // Intercept 401 → refresh once → retry
   if (response.status === 401 && !skipAuth) {
-    const refreshed = refreshTokens();
+    const refreshed = await useAuthStore.getState().refreshTokens();
     if (refreshed) {
       const newToken = useAuthStore.getState().accessToken;
-      headers.set('Authorization', `Bearer ${newToken}`);
+      if (newToken) {
+        headers.set('Authorization', `Bearer ${newToken}`);
+      }
       response = await fetch(url, { ...fetchOptions, headers });
-    } else {
-      logout();
     }
   }
 

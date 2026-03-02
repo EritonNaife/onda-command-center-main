@@ -46,7 +46,9 @@ export const OverviewHeader = () => {
               </AvatarFallback>
             </Avatar>
             <button
-              onClick={logout}
+              onClick={() => {
+                void logout();
+              }}
               className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
               aria-label="Sign out"
             >

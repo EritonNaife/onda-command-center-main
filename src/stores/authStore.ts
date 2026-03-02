@@ -1,18 +1,31 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import {
+  SessionAuthResponse,
+  SessionBootstrapResponse,
+  SessionOrganizationResponse,
+  SessionUserResponse,
+  bootstrapSession as fetchSessionBootstrap,
+  loginSession,
+  logoutSession,
+  refreshSession,
+} from '@/lib/sessionClient';
 
 export interface User {
   id: string;
   name: string;
-  email: string;
-  role: 'admin' | 'manager' | 'viewer';
-  avatarUrl: string;
+  email: string | null;
+  username: string | null;
+  phoneNumber: string | null;
+  type: string;
+  isActive: boolean;
 }
 
 export interface Org {
   id: string;
   name: string;
-  plan: 'starter' | 'pro' | 'enterprise';
+  role: string;
+  isActive: boolean;
 }
 
 interface AuthState {
@@ -23,81 +36,288 @@ interface AuthState {
   tokenExpiresAt: number | null;
   isAuthenticated: boolean;
   orgs: Org[];
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
-  refreshTokens: () => boolean;
+  isBootstrapping: boolean;
+  isHydrated: boolean;
+  sessionLoadedAt: number | null;
+  login: (identifier: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  refreshTokens: () => Promise<boolean>;
+  bootstrapSession: () => Promise<void>;
   switchOrg: (orgId: string) => void;
+  markHydrated: () => void;
 }
 
-const MOCK_ORGS: Org[] = [
-  { id: 'org-1', name: 'MUVUE Entertainment', plan: 'enterprise' },
-  { id: 'org-2', name: 'AfroWave Productions', plan: 'pro' },
-];
+const TOKEN_REFRESH_BUFFER_MS = 60_000;
+const SESSION_BOOTSTRAP_TTL_MS = 60_000;
 
-const generateToken = () =>
-  Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+let refreshPromise: Promise<boolean> | null = null;
+let bootstrapPromise: Promise<void> | null = null;
 
-const TOKEN_LIFETIME = 15 * 60 * 1000; // 15 minutes
+function toUser(user: SessionUserResponse): User {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email ?? null,
+    username: user.username ?? null,
+    phoneNumber: user.phone_number ?? null,
+    type: user.type,
+    isActive: user.is_active,
+  };
+}
+
+function toOrg(org: SessionOrganizationResponse): Org {
+  return {
+    id: org.id,
+    name: org.name,
+    role: org.role,
+    isActive: org.is_active,
+  };
+}
+
+function selectOrg(orgs: Org[], currentOrgId?: string | null): Org | null {
+  if (orgs.length === 0) {
+    return null;
+  }
+
+  if (!currentOrgId) {
+    return orgs[0];
+  }
+
+  return orgs.find((org) => org.id === currentOrgId) ?? orgs[0];
+}
+
+function getTokenExpiry(expiresInSeconds: number): number {
+  return Date.now() + expiresInSeconds * 1000;
+}
+
+function clearSessionState(): Pick<
+  AuthState,
+  | 'user'
+  | 'org'
+  | 'accessToken'
+  | 'refreshToken'
+  | 'tokenExpiresAt'
+  | 'isAuthenticated'
+  | 'orgs'
+  | 'isBootstrapping'
+  | 'sessionLoadedAt'
+> {
+  return {
+    user: null,
+    org: null,
+    accessToken: null,
+    refreshToken: null,
+    tokenExpiresAt: null,
+    isAuthenticated: false,
+    orgs: [],
+    isBootstrapping: false,
+    sessionLoadedAt: null,
+  };
+}
+
+function applyBootstrapContext(
+  state: AuthState,
+  response: SessionBootstrapResponse,
+): Pick<AuthState, 'user' | 'org' | 'orgs' | 'isAuthenticated' | 'isBootstrapping' | 'sessionLoadedAt'> {
+  const orgs = response.organizations.map(toOrg);
+
+  return {
+    user: toUser(response.user),
+    orgs,
+    org: selectOrg(orgs, state.org?.id),
+    isAuthenticated: true,
+    isBootstrapping: false,
+    sessionLoadedAt: Date.now(),
+  };
+}
+
+function applyLoginSession(
+  state: AuthState,
+  response: SessionAuthResponse,
+): Pick<
+  AuthState,
+  | 'user'
+  | 'org'
+  | 'orgs'
+  | 'accessToken'
+  | 'refreshToken'
+  | 'tokenExpiresAt'
+  | 'isAuthenticated'
+  | 'isBootstrapping'
+  | 'sessionLoadedAt'
+> {
+  const orgs = response.organizations.map(toOrg);
+
+  return {
+    user: toUser(response.user),
+    orgs,
+    org: selectOrg(orgs, state.org?.id),
+    accessToken: response.access_token,
+    refreshToken: response.refresh_token,
+    tokenExpiresAt: getTokenExpiry(response.expires_in),
+    isAuthenticated: true,
+    isBootstrapping: false,
+    sessionLoadedAt: Date.now(),
+  };
+}
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      user: null,
-      org: null,
-      accessToken: null,
-      refreshToken: null,
-      tokenExpiresAt: null,
-      isAuthenticated: false,
-      orgs: MOCK_ORGS,
+      ...clearSessionState(),
+      isHydrated: false,
 
-      login: async (email: string, _password: string) => {
-        // Simulate network delay
-        await new Promise((r) => setTimeout(r, 800));
+      login: async (identifier: string, password: string) => {
+        const response = await loginSession(identifier, password);
 
-        const user: User = {
-          id: 'user-1',
-          name: email.split('@')[0].replace(/[^a-zA-Z]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-          email,
-          role: 'admin',
-          avatarUrl: '',
-        };
-
-        set({
-          user,
-          org: MOCK_ORGS[0],
-          accessToken: generateToken(),
-          refreshToken: generateToken(),
-          tokenExpiresAt: Date.now() + TOKEN_LIFETIME,
-          isAuthenticated: true,
-        });
+        set((state) => ({
+          ...applyLoginSession(state, response),
+        }));
       },
 
-      logout: () => {
-        set({
-          user: null,
-          org: null,
-          accessToken: null,
-          refreshToken: null,
-          tokenExpiresAt: null,
-          isAuthenticated: false,
-        });
+      logout: async () => {
+        const refreshToken = get().refreshToken;
+
+        if (refreshToken) {
+          try {
+            await logoutSession(refreshToken);
+          } catch {
+            // Client state must still be cleared even if revocation fails.
+          }
+        }
+
+        refreshPromise = null;
+        bootstrapPromise = null;
+        set(clearSessionState());
       },
 
-      refreshTokens: () => {
-        const { refreshToken } = get();
-        if (!refreshToken) return false;
-        set({
-          accessToken: generateToken(),
-          tokenExpiresAt: Date.now() + TOKEN_LIFETIME,
-        });
-        return true;
+      refreshTokens: async () => {
+        if (refreshPromise) {
+          return refreshPromise;
+        }
+
+        const currentRefreshToken = get().refreshToken;
+        if (!currentRefreshToken) {
+          set(clearSessionState());
+          return false;
+        }
+
+        refreshPromise = (async () => {
+          try {
+            const tokens = await refreshSession(currentRefreshToken);
+
+            set({
+              accessToken: tokens.access_token,
+              refreshToken: tokens.refresh_token,
+              tokenExpiresAt: getTokenExpiry(tokens.expires_in),
+              isAuthenticated: true,
+            });
+
+            return true;
+          } catch {
+            set(clearSessionState());
+            return false;
+          } finally {
+            refreshPromise = null;
+          }
+        })();
+
+        return refreshPromise;
+      },
+
+      bootstrapSession: async () => {
+        if (bootstrapPromise) {
+          return bootstrapPromise;
+        }
+
+        const {
+          isAuthenticated,
+          accessToken,
+          tokenExpiresAt,
+          sessionLoadedAt,
+        } = get();
+
+        if (!isAuthenticated || !accessToken) {
+          return;
+        }
+
+        const recentlyBootstrapped =
+          sessionLoadedAt !== null &&
+          Date.now() - sessionLoadedAt < SESSION_BOOTSTRAP_TTL_MS;
+
+        if (recentlyBootstrapped) {
+          return;
+        }
+
+        bootstrapPromise = (async () => {
+          set({ isBootstrapping: true });
+
+          try {
+            const shouldRefresh =
+              tokenExpiresAt !== null &&
+              tokenExpiresAt - Date.now() < TOKEN_REFRESH_BUFFER_MS;
+
+            if (shouldRefresh) {
+              const refreshed = await get().refreshTokens();
+              if (!refreshed) {
+                return;
+              }
+            }
+
+            const latestToken = get().accessToken;
+            if (!latestToken) {
+              set(clearSessionState());
+              return;
+            }
+
+            const response = await fetchSessionBootstrap(latestToken);
+
+            set((state) => ({
+              ...applyBootstrapContext(state, response),
+            }));
+          } catch {
+            set(clearSessionState());
+          } finally {
+            bootstrapPromise = null;
+            set((state) => ({
+              isBootstrapping: false,
+              sessionLoadedAt: state.sessionLoadedAt,
+            }));
+          }
+        })();
+
+        return bootstrapPromise;
       },
 
       switchOrg: (orgId: string) => {
-        const org = MOCK_ORGS.find((o) => o.id === orgId);
-        if (org) set({ org });
+        const org = get().orgs.find((candidate) => candidate.id === orgId);
+        if (org) {
+          set({
+            org,
+          });
+        }
+      },
+
+      markHydrated: () => {
+        set({
+          isHydrated: true,
+        });
       },
     }),
-    { name: 'muvue-auth' }
-  )
+    {
+      name: 'muvue-auth',
+      partialize: (state) => ({
+        user: state.user,
+        org: state.org,
+        accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
+        tokenExpiresAt: state.tokenExpiresAt,
+        isAuthenticated: state.isAuthenticated,
+        orgs: state.orgs,
+      }),
+      onRehydrateStorage: () => (state) => {
+        state?.markHydrated();
+      },
+    },
+  ),
 );
