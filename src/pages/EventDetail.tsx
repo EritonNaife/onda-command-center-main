@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useEventDetail } from '@/hooks/useEventDetail';
 import { apiPatch } from '@/lib/apiClient';
 import { isLiveEventStatus } from '@/lib/eventRouting';
@@ -150,6 +151,14 @@ const EventDetail = () => {
     endTime: '',
     capacity: '',
   });
+
+  const { data: overview } = useDashboardOverview();
+
+  const venueName = useMemo(() => {
+    if (!overview || !eventId) return null;
+    const match = overview.upcoming_events.find((e) => e.id === eventId);
+    return match?.venue_name ?? null;
+  }, [overview, eventId]);
 
   const canEdit =
     org?.role === 'admin' || org?.role === 'organizer';
@@ -320,7 +329,7 @@ const EventDetail = () => {
                     </div>
                     <div className="inline-flex items-center gap-2">
                       <MapPin className="h-4 w-4 text-primary" />
-                      Venue {event.venue_id.slice(0, 8)}
+                      {venueName ?? '\u2014'}
                     </div>
                   </div>
                 </div>

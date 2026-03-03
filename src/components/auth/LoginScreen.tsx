@@ -45,7 +45,7 @@ export const LoginScreen = () => {
       >
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            MUVUE <span className="text-primary">Studio</span>
+            ONDA <span className="text-primary">Command Center</span>
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Sign in to your command center

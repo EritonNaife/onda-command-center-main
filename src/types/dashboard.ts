@@ -119,6 +119,13 @@ export interface LiveEventFinance {
   payout_logs: LiveEventPayoutLog[];
 }
 
+export interface LiveEventVelocityPoint {
+  time: string;
+  actual: number;
+  projected: number;
+  tickets_sold: number;
+}
+
 export interface LiveEventSnapshot {
   eventId: string;
   organizationId: string;
@@ -128,6 +135,7 @@ export interface LiveEventSnapshot {
   alerts: LiveEventAlert[];
   channelROI: LiveEventChannelROI[];
   finance: LiveEventFinance;
+  velocity_history: LiveEventVelocityPoint[];
   incidents: unknown[];
   timestamp: string;
   dataSourceStatus: LiveEventDataSourceStatus;

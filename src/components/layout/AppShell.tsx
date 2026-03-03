@@ -1,4 +1,5 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, LogOut, RadioTower } from 'lucide-react';
 import { OrgSwitcher } from '@/components/auth/OrgSwitcher';
 import { NavLink } from '@/components/NavLink';
@@ -16,6 +17,16 @@ const navLinkActiveClassName = 'bg-white/[0.06] text-foreground';
 export const AppShell = ({ children }: AppShellProps) => {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const org = useAuthStore((s) => s.org);
+  const navigate = useNavigate();
+  const prevOrgId = useRef(org?.id);
+
+  useEffect(() => {
+    if (prevOrgId.current && org?.id && prevOrgId.current !== org.id) {
+      navigate('/');
+    }
+    prevOrgId.current = org?.id;
+  }, [org?.id, navigate]);
 
   return (
     <div className="min-h-screen bg-background">

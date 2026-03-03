@@ -96,27 +96,34 @@ function buildIncidents(
   return incidents.slice(0, 8);
 }
 
-function buildVelocityData(snapshot: LiveEventSnapshot): LiveDashboardVelocityPoint[] {
-  const actual = snapshot.revenue.actual_mzn;
-  const projected = Math.max(snapshot.revenue.projected_mzn, actual);
-  const steps = [
-    { time: '-50m', actualFactor: 0.12, projectedFactor: 0.18 },
-    { time: '-40m', actualFactor: 0.24, projectedFactor: 0.3 },
-    { time: '-30m', actualFactor: 0.38, projectedFactor: 0.44 },
-    { time: '-20m', actualFactor: 0.56, projectedFactor: 0.6 },
-    { time: '-10m', actualFactor: 0.78, projectedFactor: 0.78 },
-    { time: 'Now', actualFactor: 1, projectedFactor: 0.9 },
-    { time: '+20m', actualFactor: null, projectedFactor: 1 },
-  ];
+function formatSnapshotTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '?';
 
-  return steps.map((step) => ({
-    time: step.time,
-    actual:
-      step.actualFactor === null
-        ? null
-        : Math.round(actual * step.actualFactor),
-    projected: Math.round(projected * step.projectedFactor),
-  }));
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function buildVelocityData(snapshot: LiveEventSnapshot): LiveDashboardVelocityPoint[] {
+  const history = snapshot.velocity_history;
+
+  if (history && history.length >= 2) {
+    return history.map((point) => ({
+      time: formatSnapshotTime(point.time),
+      actual: Math.round(point.actual),
+      projected: Math.round(point.projected),
+    }));
+  }
+
+  return [
+    {
+      time: 'Now',
+      actual: snapshot.revenue.actual_mzn,
+      projected: Math.max(snapshot.revenue.projected_mzn, snapshot.revenue.actual_mzn),
+    },
+  ];
 }
 
 function toViewModel(snapshot: LiveEventSnapshot): LiveDashboardViewModel {

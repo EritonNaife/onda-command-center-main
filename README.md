@@ -1,4 +1,4 @@
-# Event Command Dashboard
+# Onda Command Center
 
 A real-time operations dashboard for live event management — built with React, TypeScript, and Vite.
 
@@ -53,14 +53,15 @@ src/
 ├── pages/
 │   ├── Overview.tsx          # Organization overview
 │   ├── Events.tsx            # Paginated events list
-│   ├── EventDetail.tsx       # Event detail + edit flow
+│   ├── EventDetail.tsx       # Event detail + edit flow (resolves venue name from overview)
 │   ├── Index.tsx             # Live event dashboard
 │   └── NotFound.tsx          # 404 page
 ├── components/
-│   ├── layout/               # Shared authenticated shell
+│   ├── layout/
+│   │   └── AppShell.tsx      # Authenticated shell — redirects to / on org switch
 │   ├── dashboard/            # Dashboard panel components
 │   ├── overview/             # Overview page widgets
-│   ├── auth/                 # Session and org guard UI
+│   ├── auth/                 # Session and org guard UI (login branded "ONDA Command Center")
 │   └── ui/                   # shadcn/ui component library
 ├── stores/
 │   └── authStore.ts          # Session state + org context
@@ -68,7 +69,7 @@ src/
 │   ├── useDashboardOverview.ts
 │   ├── useEvents.ts
 │   ├── useEventDetail.ts
-│   ├── useLiveEventDashboard.ts
+│   ├── useLiveEventDashboard.ts  # Reads real velocity_history snapshots from backend
 │   └── use-toast.ts
 └── lib/
     ├── apiClient.ts

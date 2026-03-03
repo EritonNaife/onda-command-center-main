@@ -66,66 +66,74 @@ export const MomentumEngine = ({ event }: MomentumEngineProps) => {
 
         {/* Chart */}
         <div className="h-48 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={event.velocityData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="gradActual" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(170, 70%, 45%)" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="hsl(170, 70%, 45%)" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="gradProjected" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(215, 15%, 55%)" stopOpacity={0.15} />
-                  <stop offset="100%" stopColor="hsl(215, 15%, 55%)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis
-                dataKey="time"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: 'hsl(215, 15%, 55%)', fontSize: 11 }}
-              />
-              <YAxis
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: 'hsl(215, 15%, 55%)', fontSize: 11 }}
-                tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
-                width={45}
-              />
-              <Tooltip
-                contentStyle={{
-                  background: 'hsl(220, 18%, 10%)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  color: 'hsl(210, 20%, 92%)',
-                }}
-                formatter={(value: number) => [`${formatMZN(value)} MZN`]}
-              />
-              <ReferenceLine
-                y={event.breakEvenTarget}
-                stroke="hsl(45, 90%, 55%)"
-                strokeDasharray="4 4"
-                strokeOpacity={0.5}
-              />
-              <Area
-                type="monotone"
-                dataKey="projected"
-                stroke="hsl(215, 15%, 45%)"
-                strokeWidth={1.5}
-                strokeDasharray="6 4"
-                fill="url(#gradProjected)"
-                connectNulls
-              />
-              <Area
-                type="monotone"
-                dataKey="actual"
-                stroke="hsl(170, 70%, 45%)"
-                strokeWidth={2}
-                fill="url(#gradActual)"
-                connectNulls={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          {event.velocityData.length < 2 ? (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-muted-foreground">
+                Velocity data will appear after a few minutes of live activity.
+              </p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={event.velocityData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradActual" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(170, 70%, 45%)" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="hsl(170, 70%, 45%)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradProjected" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(215, 15%, 55%)" stopOpacity={0.15} />
+                    <stop offset="100%" stopColor="hsl(215, 15%, 55%)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis
+                  dataKey="time"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'hsl(215, 15%, 55%)', fontSize: 11 }}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'hsl(215, 15%, 55%)', fontSize: 11 }}
+                  tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                  width={45}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: 'hsl(220, 18%, 10%)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    color: 'hsl(210, 20%, 92%)',
+                  }}
+                  formatter={(value: number) => [`${formatMZN(value)} MZN`]}
+                />
+                <ReferenceLine
+                  y={event.breakEvenTarget}
+                  stroke="hsl(45, 90%, 55%)"
+                  strokeDasharray="4 4"
+                  strokeOpacity={0.5}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="projected"
+                  stroke="hsl(215, 15%, 45%)"
+                  strokeWidth={1.5}
+                  strokeDasharray="6 4"
+                  fill="url(#gradProjected)"
+                  connectNulls
+                />
+                <Area
+                  type="monotone"
+                  dataKey="actual"
+                  stroke="hsl(170, 70%, 45%)"
+                  strokeWidth={2}
+                  fill="url(#gradActual)"
+                  connectNulls={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
     </motion.div>
