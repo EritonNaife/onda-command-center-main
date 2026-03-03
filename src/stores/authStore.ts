@@ -305,7 +305,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'muvue-auth',
+      name: 'onda-auth',
       partialize: (state) => ({
         user: state.user,
         org: state.org,
