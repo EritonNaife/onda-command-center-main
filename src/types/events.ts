@@ -4,7 +4,15 @@ export type EventPublicationStatus = 'draft' | 'published' | 'cancelled';
 export interface EventTicketType {
   id: string;
   name: string;
+  description?: string | null;
   price: number;
+  is_vip?: boolean | null;
+  vip_tier?: string | null;
+  sale_start_date?: string | null;
+  sale_end_date?: string | null;
+  is_available?: boolean;
+  is_sold_out?: boolean;
+  quantity: number;
   quantity_sold: number;
   quantity_remaining: number;
 }
@@ -84,4 +92,24 @@ export interface UpdateEventRequest {
   timezone?: string;
   status?: EventPublicationStatus;
   cover_image_url?: string;
+}
+
+export interface CreateTicketTypeRequest {
+  name: string;
+  price: number;
+  quantity: number;
+  description?: string;
+  is_vip?: boolean;
+  sale_start_date?: string;
+  sale_end_date?: string;
+}
+
+export interface UpdateTicketTypeRequest {
+  name?: string;
+  price?: number;
+  quantity?: number;
+  description?: string;
+  is_vip?: boolean;
+  sale_start_date?: string;
+  sale_end_date?: string;
 }

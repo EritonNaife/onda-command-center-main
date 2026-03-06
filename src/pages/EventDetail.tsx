@@ -10,10 +10,12 @@ import {
   Globe2,
   Loader2,
   MapPin,
+  Plus,
   RadioTower,
   Save,
   ScanLine,
   Ticket,
+  Trash2,
   TrendingUp,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -30,6 +32,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -39,6 +42,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -55,6 +59,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  useCreateTicketType,
+  useDeleteTicketType,
+  useTicketTypes,
+  useUpdateTicketType,
+} from '@/hooks/useTicketTypes';
 import { useToast } from '@/hooks/use-toast';
 import { useEventDetail } from '@/hooks/useEventDetail';
 import { apiDelete, apiPatch } from '@/lib/apiClient';
@@ -70,10 +80,13 @@ import {
 import { isLiveEventStatus } from '@/lib/eventRouting';
 import { useAuthStore } from '@/stores/authStore';
 import {
+  CreateTicketTypeRequest,
   EventDetail as EventDetailModel,
   EventListItem,
   EventPublicationStatus,
+  EventTicketType,
   UpdateEventRequest,
+  UpdateTicketTypeRequest,
 } from '@/types/events';
 
 interface EditFormState {
@@ -87,6 +100,18 @@ interface EditFormState {
   coverImageUrl: string;
 }
 
+interface TicketTypeFormState {
+  name: string;
+  price: string;
+  quantity: string;
+  isVip: boolean;
+  saleStartDate: string;
+  saleEndDate: string;
+  description: string;
+}
+
+type TicketDialogMode = 'create' | 'edit';
+
 const MANAGEMENT_STATUS_OPTIONS: Array<{
   value: EventPublicationStatus;
   label: string;
@@ -95,6 +120,16 @@ const MANAGEMENT_STATUS_OPTIONS: Array<{
   { value: 'published', label: 'Published' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
+
+const EMPTY_TICKET_TYPE_FORM: TicketTypeFormState = {
+  name: '',
+  price: '',
+  quantity: '',
+  isVip: false,
+  saleStartDate: '',
+  saleEndDate: '',
+  description: '',
+};
 
 function formatDateTime(iso: string): string {
   const date = new Date(iso);
@@ -114,12 +149,32 @@ function formatDateTime(iso: string): string {
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-US', {
-    maximumFractionDigits: 0,
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+    maximumFractionDigits: 2,
   }).format(value);
 }
 
 function formatPercent(value: number): string {
   return `${Math.round(value)}%`;
+}
+
+function formatSaleWindow(
+  saleStartDate?: string | null,
+  saleEndDate?: string | null,
+): string {
+  if (!saleStartDate && !saleEndDate) {
+    return 'Open sale window';
+  }
+
+  if (saleStartDate && saleEndDate) {
+    return `${formatDateTime(saleStartDate)} -> ${formatDateTime(saleEndDate)}`;
+  }
+
+  if (saleStartDate) {
+    return `Starts ${formatDateTime(saleStartDate)}`;
+  }
+
+  return `Ends ${formatDateTime(saleEndDate ?? '')}`;
 }
 
 function getStatusBadgeClassName(status?: string): string {
@@ -155,18 +210,36 @@ function buildEditFormState(event: EventDetailModel): EditFormState {
   };
 }
 
+function buildTicketTypeFormState(ticketType: EventTicketType): TicketTypeFormState {
+  return {
+    name: ticketType.name,
+    price: String(ticketType.price),
+    quantity: String(ticketType.quantity),
+    isVip: Boolean(ticketType.is_vip),
+    saleStartDate: toLocalDateTimeValue(ticketType.sale_start_date),
+    saleEndDate: toLocalDateTimeValue(ticketType.sale_end_date),
+    description: ticketType.description ?? '',
+  };
+}
+
 const EventDetail = () => {
   const { eventId } = useParams<{ eventId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const org = useAuthStore((s) => s.org);
+  const org = useAuthStore((state) => state.org);
   const {
     data: event,
     isLoading,
     isError,
     error,
   } = useEventDetail(eventId);
+  const {
+    data: ticketTypesData,
+    isLoading: isTicketTypesLoading,
+    isError: isTicketTypesError,
+    error: ticketTypesError,
+  } = useTicketTypes(eventId);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<EditFormState>({
     name: '',
@@ -178,19 +251,33 @@ const EventDetail = () => {
     timezone: DEFAULT_EVENT_TIMEZONE,
     coverImageUrl: '',
   });
+  const [isTicketDialogOpen, setIsTicketDialogOpen] = useState(false);
+  const [ticketDialogMode, setTicketDialogMode] = useState<TicketDialogMode>('create');
+  const [editingTicketType, setEditingTicketType] = useState<EventTicketType | null>(
+    null,
+  );
+  const [ticketTypeForm, setTicketTypeForm] = useState<TicketTypeFormState>(
+    EMPTY_TICKET_TYPE_FORM,
+  );
 
+  const ticketTypes = useMemo(
+    () => ticketTypesData ?? event?.ticket_types ?? [],
+    [ticketTypesData, event?.ticket_types],
+  );
   const canEdit = org?.role === 'admin' || org?.role === 'organizer';
+  const canManageTicketTypes =
+    canEdit && event?.publication_status !== 'cancelled';
 
   const soldCount = useMemo(() => {
     if (!event) {
       return 0;
     }
 
-    return event.revenue?.tickets_sold ?? event.ticket_types.reduce(
-      (sum, ticketType) => sum + ticketType.quantity_sold,
-      0,
+    return (
+      event.revenue?.tickets_sold ??
+      ticketTypes.reduce((sum, ticketType) => sum + ticketType.quantity_sold, 0)
     );
-  }, [event]);
+  }, [event, ticketTypes]);
 
   const capacityPercentage = useMemo(() => {
     if (!event || event.capacity <= 0) {
@@ -211,12 +298,8 @@ const EventDetail = () => {
   }, [editForm.timezone]);
 
   const updateEventMutation = useMutation({
-    mutationFn: async (payload: UpdateEventRequest) => {
-      return apiPatch<EventListItem, UpdateEventRequest>(
-        `/events/${eventId}`,
-        payload,
-      );
-    },
+    mutationFn: async (payload: UpdateEventRequest) =>
+      apiPatch<EventListItem, UpdateEventRequest>(`/events/${eventId}`, payload),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['event-detail'] }),
@@ -263,6 +346,12 @@ const EventDetail = () => {
     },
   });
 
+  const createTicketTypeMutation = useCreateTicketType(eventId);
+  const updateTicketTypeMutation = useUpdateTicketType(eventId);
+  const deleteTicketTypeMutation = useDeleteTicketType(eventId);
+  const isTicketDialogPending =
+    createTicketTypeMutation.isPending || updateTicketTypeMutation.isPending;
+
   const openEditDialog = () => {
     if (!event) {
       return;
@@ -270,6 +359,20 @@ const EventDetail = () => {
 
     setEditForm(buildEditFormState(event));
     setIsEditOpen(true);
+  };
+
+  const openCreateTicketTypeDialog = () => {
+    setTicketDialogMode('create');
+    setEditingTicketType(null);
+    setTicketTypeForm(EMPTY_TICKET_TYPE_FORM);
+    setIsTicketDialogOpen(true);
+  };
+
+  const openEditTicketTypeDialog = (ticketType: EventTicketType) => {
+    setTicketDialogMode('edit');
+    setEditingTicketType(ticketType);
+    setTicketTypeForm(buildTicketTypeFormState(ticketType));
+    setIsTicketDialogOpen(true);
   };
 
   const submitEdit = (inputEvent: FormEvent<HTMLFormElement>) => {
@@ -358,6 +461,151 @@ const EventDetail = () => {
       timezone: trimToUndefined(editForm.timezone) ?? DEFAULT_EVENT_TIMEZONE,
       cover_image_url: coverImageUrl,
     });
+  };
+
+  const submitTicketType = async (inputEvent: FormEvent<HTMLFormElement>) => {
+    inputEvent.preventDefault();
+
+    if (!eventId) {
+      return;
+    }
+
+    const name = ticketTypeForm.name.trim();
+
+    if (!name) {
+      toast({
+        title: 'Name required',
+        description: 'Ticket type name cannot be empty.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const price = Number(ticketTypeForm.price);
+
+    if (!Number.isFinite(price) || price < 0) {
+      toast({
+        title: 'Invalid price',
+        description: 'Price must be zero or greater.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const quantity = Number(ticketTypeForm.quantity);
+
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      toast({
+        title: 'Invalid quantity',
+        description: 'Quantity must be a whole number greater than zero.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (
+      ticketDialogMode === 'edit' &&
+      editingTicketType &&
+      quantity < editingTicketType.quantity_sold
+    ) {
+      toast({
+        title: 'Quantity too low',
+        description: `Quantity cannot be reduced below tickets sold (${editingTicketType.quantity_sold}).`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const saleStartDate = localInputToIso(ticketTypeForm.saleStartDate);
+    const saleEndDate = localInputToIso(ticketTypeForm.saleEndDate);
+
+    if (
+      saleStartDate &&
+      saleEndDate &&
+      new Date(saleEndDate).getTime() < new Date(saleStartDate).getTime()
+    ) {
+      toast({
+        title: 'Invalid sale window',
+        description: 'Sale end date must be after or equal to the sale start date.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const payload: CreateTicketTypeRequest | UpdateTicketTypeRequest = {
+      name,
+      price,
+      quantity,
+      description: trimToUndefined(ticketTypeForm.description),
+      is_vip: ticketTypeForm.isVip,
+      sale_start_date: saleStartDate,
+      sale_end_date: saleEndDate,
+    };
+
+    try {
+      if (ticketDialogMode === 'create') {
+        await createTicketTypeMutation.mutateAsync(
+          payload as CreateTicketTypeRequest,
+        );
+        toast({
+          title: 'Ticket type created',
+          description: `${name} is now available on this event.`,
+        });
+      } else if (editingTicketType) {
+        await updateTicketTypeMutation.mutateAsync({
+          ticketTypeId: editingTicketType.id,
+          payload: payload as UpdateTicketTypeRequest,
+        });
+        toast({
+          title: 'Ticket type updated',
+          description: `${name} has been updated.`,
+        });
+      }
+
+      setIsTicketDialogOpen(false);
+      setEditingTicketType(null);
+      setTicketTypeForm(EMPTY_TICKET_TYPE_FORM);
+    } catch (mutationError) {
+      toast({
+        title:
+          ticketDialogMode === 'create'
+            ? 'Create ticket type failed'
+            : 'Update ticket type failed',
+        description:
+          mutationError instanceof Error
+            ? mutationError.message
+            : 'The ticket type could not be saved.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteTicketType = async (ticketType: EventTicketType) => {
+    if (ticketType.quantity_sold > 0) {
+      toast({
+        title: 'Cannot delete ticket type',
+        description: 'Ticket types with sales cannot be deleted.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await deleteTicketTypeMutation.mutateAsync(ticketType.id);
+      toast({
+        title: 'Ticket type deleted',
+        description: `${ticketType.name} has been removed.`,
+      });
+    } catch (mutationError) {
+      toast({
+        title: 'Delete failed',
+        description:
+          mutationError instanceof Error
+            ? mutationError.message
+            : 'The ticket type could not be deleted.',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -584,17 +832,47 @@ const EventDetail = () => {
                 transition={{ duration: 0.45, delay: 0.25 }}
               >
                 <div className="border-b border-white/[0.06] px-6 py-5">
-                  <div className="flex items-center gap-2">
-                    <Ticket className="h-4 w-4 text-primary" />
-                    <h2 className="text-sm font-semibold text-foreground">
-                      Ticket Types
-                    </h2>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2">
+                      <Ticket className="h-4 w-4 text-primary" />
+                      <h2 className="text-sm font-semibold text-foreground">
+                        Ticket Types
+                      </h2>
+                    </div>
+                    {canManageTicketTypes && (
+                      <button
+                        type="button"
+                        onClick={openCreateTicketTypeDialog}
+                        className="inline-flex h-10 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add Ticket Type
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {event.ticket_types.length === 0 ? (
+                {isTicketTypesLoading ? (
                   <div className="p-6 text-sm text-muted-foreground">
-                    No ticket types configured for this event.
+                    Loading ticket types...
+                  </div>
+                ) : isTicketTypesError ? (
+                  <div className="p-6 text-sm text-destructive">
+                    Unable to load ticket types: {ticketTypesError?.message}
+                  </div>
+                ) : ticketTypes.length === 0 ? (
+                  <div className="space-y-3 p-6 text-sm text-muted-foreground">
+                    <p>No ticket types configured for this event.</p>
+                    {canManageTicketTypes && (
+                      <button
+                        type="button"
+                        onClick={openCreateTicketTypeDialog}
+                        className="inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-primary/80"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Create the first ticket type
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <Table>
@@ -607,23 +885,23 @@ const EventDetail = () => {
                           Price
                         </TableHead>
                         <TableHead className="text-right text-xs text-muted-foreground">
-                          Sold
+                          Inventory
                         </TableHead>
-                        <TableHead className="text-right text-xs text-muted-foreground">
-                          Remaining
+                        <TableHead className="hidden text-xs text-muted-foreground lg:table-cell">
+                          Sale Window
                         </TableHead>
-                        <TableHead className="text-right text-xs text-muted-foreground">
-                          Sell-through
-                        </TableHead>
+                        {canManageTicketTypes && (
+                          <TableHead className="text-right text-xs text-muted-foreground">
+                            Actions
+                          </TableHead>
+                        )}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {event.ticket_types.map((ticketType) => {
-                        const totalInventory =
-                          ticketType.quantity_sold + ticketType.quantity_remaining;
+                      {ticketTypes.map((ticketType) => {
                         const sellThrough =
-                          totalInventory > 0
-                            ? (ticketType.quantity_sold / totalInventory) * 100
+                          ticketType.quantity > 0
+                            ? (ticketType.quantity_sold / ticketType.quantity) * 100
                             : 0;
 
                         return (
@@ -631,21 +909,124 @@ const EventDetail = () => {
                             key={ticketType.id}
                             className="border-white/[0.06] hover:bg-white/[0.02]"
                           >
-                            <TableCell className="font-medium text-foreground">
-                              {ticketType.name}
+                            <TableCell>
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-medium text-foreground">
+                                    {ticketType.name}
+                                  </span>
+                                  {ticketType.is_vip && (
+                                    <span className="inline-flex rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300">
+                                      VIP
+                                    </span>
+                                  )}
+                                  {ticketType.is_sold_out && (
+                                    <span className="inline-flex rounded-full border border-red-400/20 bg-red-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-red-300">
+                                      Sold out
+                                    </span>
+                                  )}
+                                </div>
+                                {ticketType.description && (
+                                  <p className="max-w-md text-xs text-muted-foreground">
+                                    {ticketType.description}
+                                  </p>
+                                )}
+                                <p className="text-xs text-muted-foreground lg:hidden">
+                                  {formatSaleWindow(
+                                    ticketType.sale_start_date,
+                                    ticketType.sale_end_date,
+                                  )}
+                                </p>
+                              </div>
                             </TableCell>
                             <TableCell className="text-right font-mono text-sm text-gold">
                               {formatCurrency(ticketType.price)} MZN
                             </TableCell>
-                            <TableCell className="text-right font-mono text-sm text-foreground">
-                              {ticketType.quantity_sold.toLocaleString()}
+                            <TableCell className="text-right font-mono text-sm">
+                              <div className="space-y-1">
+                                <div className="text-foreground">
+                                  {ticketType.quantity_sold.toLocaleString()} sold
+                                </div>
+                                <div className="text-muted-foreground">
+                                  {ticketType.quantity_remaining.toLocaleString()} left /
+                                  {' '}
+                                  {ticketType.quantity.toLocaleString()} total
+                                </div>
+                                <div className="text-primary">
+                                  {formatPercent(sellThrough)} sell-through
+                                </div>
+                              </div>
                             </TableCell>
-                            <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                              {ticketType.quantity_remaining.toLocaleString()}
+                            <TableCell className="hidden text-sm text-muted-foreground lg:table-cell">
+                              {formatSaleWindow(
+                                ticketType.sale_start_date,
+                                ticketType.sale_end_date,
+                              )}
                             </TableCell>
-                            <TableCell className="text-right font-mono text-sm text-primary">
-                              {formatPercent(sellThrough)}
-                            </TableCell>
+                            {canManageTicketTypes && (
+                              <TableCell className="text-right">
+                                <div className="inline-flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditTicketTypeDialog(ticketType)}
+                                    className="inline-flex h-9 items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 text-sm font-medium text-foreground transition-colors hover:bg-white/[0.06]"
+                                  >
+                                    <Edit3 className="h-3.5 w-3.5" />
+                                    Edit
+                                  </button>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <button
+                                        type="button"
+                                        disabled={
+                                          ticketType.quantity_sold > 0 ||
+                                          deleteTicketTypeMutation.isPending
+                                        }
+                                        className="inline-flex h-9 items-center gap-2 rounded-full border border-red-400/20 bg-red-400/10 px-3 text-sm font-medium text-red-200 transition-colors hover:bg-red-400/15 disabled:cursor-not-allowed disabled:opacity-40"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                        Delete
+                                      </button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent className="border-white/[0.08] bg-card/95 text-foreground backdrop-blur-xl">
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>
+                                          Delete {ticketType.name}?
+                                        </AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          {ticketType.quantity_sold > 0
+                                            ? 'This ticket type already has sales and cannot be deleted.'
+                                            : 'This will permanently remove the ticket type from the event.'}
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel
+                                          className="border-white/[0.08] bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
+                                          disabled={deleteTicketTypeMutation.isPending}
+                                        >
+                                          Keep Ticket Type
+                                        </AlertDialogCancel>
+                                        <AlertDialogAction
+                                          onClick={() => handleDeleteTicketType(ticketType)}
+                                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                          disabled={
+                                            ticketType.quantity_sold > 0 ||
+                                            deleteTicketTypeMutation.isPending
+                                          }
+                                        >
+                                          {deleteTicketTypeMutation.isPending ? (
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                          ) : (
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                          )}
+                                          Delete
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </div>
+                              </TableCell>
+                            )}
                           </TableRow>
                         );
                       })}
@@ -1010,6 +1391,196 @@ const EventDetail = () => {
                     <Save className="h-4 w-4" />
                   )}
                   Save Changes
+                </button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={isTicketDialogOpen}
+          onOpenChange={(open) => {
+            setIsTicketDialogOpen(open);
+            if (!open) {
+              setEditingTicketType(null);
+              setTicketTypeForm(EMPTY_TICKET_TYPE_FORM);
+            }
+          }}
+        >
+          <DialogContent className="max-h-[90vh] overflow-y-auto border-white/[0.08] bg-card/95 text-foreground backdrop-blur-xl sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>
+                {ticketDialogMode === 'create'
+                  ? 'Add Ticket Type'
+                  : `Edit ${editingTicketType?.name ?? 'Ticket Type'}`}
+              </DialogTitle>
+              <DialogDescription>
+                Configure pricing, inventory, and the sales window for this
+                event&apos;s ticket offer.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form className="space-y-5" onSubmit={submitTicketType}>
+              <div className="grid gap-5 lg:grid-cols-[1.15fr_0.9fr]">
+                <section className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ticket-type-name">Name</Label>
+                    <Input
+                      id="ticket-type-name"
+                      value={ticketTypeForm.name}
+                      onChange={(inputEvent) =>
+                        setTicketTypeForm((current) => ({
+                          ...current,
+                          name: inputEvent.target.value,
+                        }))
+                      }
+                      className="border-white/[0.08] bg-white/[0.03]"
+                      placeholder="General Admission"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ticket-type-description">Description</Label>
+                    <Textarea
+                      id="ticket-type-description"
+                      value={ticketTypeForm.description}
+                      onChange={(inputEvent) =>
+                        setTicketTypeForm((current) => ({
+                          ...current,
+                          description: inputEvent.target.value,
+                        }))
+                      }
+                      className="border-white/[0.08] bg-white/[0.03]"
+                      placeholder="Optional context for the offer"
+                    />
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="ticket-type-price">Price (MZN)</Label>
+                      <Input
+                        id="ticket-type-price"
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={ticketTypeForm.price}
+                        onChange={(inputEvent) =>
+                          setTicketTypeForm((current) => ({
+                            ...current,
+                            price: inputEvent.target.value,
+                          }))
+                        }
+                        className="border-white/[0.08] bg-white/[0.03]"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ticket-type-quantity">Quantity</Label>
+                      <Input
+                        id="ticket-type-quantity"
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={ticketTypeForm.quantity}
+                        onChange={(inputEvent) =>
+                          setTicketTypeForm((current) => ({
+                            ...current,
+                            quantity: inputEvent.target.value,
+                          }))
+                        }
+                        className="border-white/[0.08] bg-white/[0.03]"
+                        required
+                      />
+                      {ticketDialogMode === 'edit' && editingTicketType && (
+                        <p className="text-xs text-muted-foreground">
+                          Sold so far: {editingTicketType.quantity_sold}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
+                <aside className="space-y-4">
+                  <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
+                    <div className="flex items-center space-x-3">
+                      <Checkbox
+                        id="ticket-type-vip"
+                        checked={ticketTypeForm.isVip}
+                        onCheckedChange={(checked) =>
+                          setTicketTypeForm((current) => ({
+                            ...current,
+                            isVip: checked === true,
+                          }))
+                        }
+                      />
+                      <div className="space-y-1">
+                        <Label htmlFor="ticket-type-vip">VIP access</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Highlight this ticket as a premium offer.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ticket-type-sale-start">Sale Start</Label>
+                    <Input
+                      id="ticket-type-sale-start"
+                      type="datetime-local"
+                      value={ticketTypeForm.saleStartDate}
+                      onChange={(inputEvent) =>
+                        setTicketTypeForm((current) => ({
+                          ...current,
+                          saleStartDate: inputEvent.target.value,
+                        }))
+                      }
+                      className="border-white/[0.08] bg-white/[0.03]"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ticket-type-sale-end">Sale End</Label>
+                    <Input
+                      id="ticket-type-sale-end"
+                      type="datetime-local"
+                      value={ticketTypeForm.saleEndDate}
+                      onChange={(inputEvent) =>
+                        setTicketTypeForm((current) => ({
+                          ...current,
+                          saleEndDate: inputEvent.target.value,
+                        }))
+                      }
+                      className="border-white/[0.08] bg-white/[0.03]"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Leave either field blank to keep the sale window open-ended.
+                    </p>
+                  </div>
+                </aside>
+              </div>
+
+              <DialogFooter>
+                <button
+                  type="button"
+                  onClick={() => setIsTicketDialogOpen(false)}
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-white/[0.08] px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground"
+                  disabled={isTicketDialogPending}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isTicketDialogPending}
+                >
+                  {isTicketDialogPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  {ticketDialogMode === 'create' ? 'Create Ticket Type' : 'Save Ticket Type'}
                 </button>
               </DialogFooter>
             </form>
