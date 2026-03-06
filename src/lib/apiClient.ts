@@ -102,6 +102,29 @@ export async function apiPatch<TResponse, TBody>(
   return response.json();
 }
 
+export async function apiPut<TResponse, TBody>(
+  path: string,
+  body: TBody,
+): Promise<TResponse> {
+  const response = await apiClient(`${API_BASE_URL}${path}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new ApiError(response.status, await response.text());
+  }
+
+  if (response.status === 204) {
+    return undefined as TResponse;
+  }
+
+  return response.json();
+}
+
 export async function apiDelete<TResponse = void>(path: string): Promise<TResponse> {
   const response = await apiClient(`${API_BASE_URL}${path}`, {
     method: 'DELETE',

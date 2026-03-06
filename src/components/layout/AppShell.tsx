@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, LogOut, RadioTower } from 'lucide-react';
+import { LayoutDashboard, LogOut, RadioTower, Settings2 } from 'lucide-react';
 import { OrgSwitcher } from '@/components/auth/OrgSwitcher';
 import { NavLink } from '@/components/NavLink';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -65,6 +65,23 @@ export const AppShell = ({ children }: AppShellProps) => {
                 activeClassName={navLinkActiveClassName}
               >
                 Events
+              </NavLink>
+              <NavLink
+                to="/venues"
+                className={navLinkClassName}
+                activeClassName={navLinkActiveClassName}
+              >
+                Venues
+              </NavLink>
+              <NavLink
+                to="/settings"
+                className={navLinkClassName}
+                activeClassName={navLinkActiveClassName}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Settings2 className="h-4 w-4" />
+                  Settings
+                </span>
               </NavLink>
             </nav>
           </div>

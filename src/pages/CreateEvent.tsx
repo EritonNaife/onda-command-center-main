@@ -1,9 +1,10 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useDeferredValue, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, CalendarPlus, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Loader2, Plus, Save } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { AppShell } from '@/components/layout/AppShell';
+import { VenueDialog } from '@/components/venues/VenueDialog';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -14,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateEvent } from '@/hooks/useCreateEvent';
-import { useEvents } from '@/hooks/useEvents';
+import { useVenue, useVenues } from '@/hooks/useVenues';
 import { useToast } from '@/hooks/use-toast';
 import {
   DEFAULT_EVENT_TIMEZONE,
@@ -25,6 +26,7 @@ import {
   trimToUndefined,
 } from '@/lib/eventManagement';
 import { CreateEventRequest } from '@/types/events';
+import { Venue } from '@/types/venues';
 
 interface CreateEventFormState {
   name: string;
@@ -57,24 +59,31 @@ const CreateEvent = () => {
   const { toast } = useToast();
   const createEventMutation = useCreateEvent();
   const [form, setForm] = useState<CreateEventFormState>(INITIAL_FORM_STATE);
-  const { data: eventsData, isError: isVenueError } = useEvents({
+  const [venueSearch, setVenueSearch] = useState('');
+  const [isCreateVenueOpen, setIsCreateVenueOpen] = useState(false);
+  const deferredVenueSearch = useDeferredValue(venueSearch.trim());
+  const { data: venuesData, isError: isVenueError, isLoading: isVenuesLoading } = useVenues({
     page: 1,
-    limit: 100,
+    limit: 50,
+    search: deferredVenueSearch || undefined,
   });
+  const { data: selectedVenue } = useVenue(form.venueId || undefined);
 
   const venueOptions = useMemo(() => {
-    const venues = new Map<string, string>();
+    const venues = new Map<string, Venue>();
 
-    eventsData?.data.forEach((event) => {
-      if (event.venue_id && event.venue_name) {
-        venues.set(event.venue_id, event.venue_name);
-      }
+    venuesData?.data.forEach((venue) => {
+      venues.set(venue.id, venue);
     });
 
-    return Array.from(venues.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((left, right) => left.name.localeCompare(right.name));
-  }, [eventsData]);
+    if (selectedVenue) {
+      venues.set(selectedVenue.id, selectedVenue);
+    }
+
+    return Array.from(venues.values()).sort((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+  }, [selectedVenue, venuesData]);
 
   const submitCreate = async (inputEvent: FormEvent<HTMLFormElement>) => {
     inputEvent.preventDefault();
@@ -193,7 +202,7 @@ const CreateEvent = () => {
             </button>
             <div className="space-y-2">
               <div className="glass-pill w-fit text-xs font-semibold uppercase tracking-[0.24em] text-primary">
-                Phase 1
+                Event Setup
               </div>
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight text-foreground">
@@ -201,8 +210,9 @@ const CreateEvent = () => {
                 </h1>
                 <p className="max-w-2xl text-sm text-muted-foreground">
                   Capture the core schedule, publishing state, and rollout
-                  details now. Venue management can stay lightweight until the
-                  dedicated venues flow lands.
+                  details now. Venue assignment now pulls from the shared venue
+                  directory, so organizers can create the place record before
+                  finishing the event.
                 </p>
               </div>
             </div>
@@ -348,6 +358,12 @@ const CreateEvent = () => {
               <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5">
                 <p className="data-label">Venue</p>
                 <div className="mt-3 space-y-2">
+                  <Input
+                    value={venueSearch}
+                    onChange={(inputEvent) => setVenueSearch(inputEvent.target.value)}
+                    className="border-white/[0.08] bg-white/[0.03]"
+                    placeholder="Search venues by name"
+                  />
                   <Select
                     value={form.venueId || NO_VENUE_VALUE}
                     onValueChange={(value) =>
@@ -364,19 +380,37 @@ const CreateEvent = () => {
                       <SelectItem value={NO_VENUE_VALUE}>No venue yet</SelectItem>
                       {venueOptions.map((venue) => (
                         <SelectItem key={venue.id} value={venue.id}>
-                          {venue.name}
+                          {[venue.name, venue.address?.city]
+                            .filter(Boolean)
+                            .join(' • ')}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Temporary list sourced from venues already referenced by
-                    current events.
-                  </p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs text-muted-foreground">
+                      {isVenuesLoading
+                        ? 'Loading venues from the directory...'
+                        : 'Live venue directory results. Add one inline if it is missing.'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setIsCreateVenueOpen(true)}
+                      className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add venue
+                    </button>
+                  </div>
+                  {!isVenuesLoading && venueOptions.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      No venues match this search yet. Create one to keep moving.
+                    </p>
+                  )}
                   {isVenueError && (
                     <p className="text-xs text-muted-foreground">
-                      Venue suggestions are unavailable right now. You can still
-                      create the event without one.
+                      Venue search is unavailable right now. You can still create
+                      the event without one.
                     </p>
                   )}
                 </div>
@@ -489,12 +523,24 @@ const CreateEvent = () => {
               First release scope
             </div>
             <p className="mt-2">
-              This flow captures the core event record now and leaves deeper
-              venue and media management for the next phases.
+              This flow captures the core event record and keeps venue creation
+              close at hand, while deeper artist and team management still land
+              in later phases.
             </p>
           </div>
         </motion.form>
       </AppShell>
+      <VenueDialog
+        open={isCreateVenueOpen}
+        onOpenChange={setIsCreateVenueOpen}
+        onSuccess={(venue) => {
+          setForm((current) => ({
+            ...current,
+            venueId: venue.id,
+          }));
+          setVenueSearch(venue.name);
+        }}
+      />
     </AuthGuard>
   );
 };

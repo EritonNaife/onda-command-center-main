@@ -7,6 +7,8 @@ import Overview from "./pages/Overview";
 import Events from "./pages/Events";
 import EventDetail from "./pages/EventDetail";
 import CreateEvent from "./pages/CreateEvent";
+import Settings from "./pages/Settings";
+import Venues from "./pages/Venues";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
@@ -22,6 +24,8 @@ const App = () => (
           <Route path="/" element={<Overview />} />
           <Route path="/events" element={<Events />} />
           <Route path="/events/new" element={<CreateEvent />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/venues" element={<Venues />} />
           <Route path="/events/:eventId/detail" element={<EventDetail />} />
           <Route path="/events/:eventId" element={<Index />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
