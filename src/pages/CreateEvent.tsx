@@ -25,6 +25,8 @@ import {
   localInputToIso,
   trimToUndefined,
 } from '@/lib/eventManagement';
+import { canManageOrganizationOperations } from '@/lib/organizationAccess';
+import { useAuthStore } from '@/stores/authStore';
 import { CreateEventRequest } from '@/types/events';
 import { Venue } from '@/types/venues';
 
@@ -56,6 +58,7 @@ const INITIAL_FORM_STATE: CreateEventFormState = {
 
 const CreateEvent = () => {
   const navigate = useNavigate();
+  const org = useAuthStore((state) => state.org);
   const { toast } = useToast();
   const createEventMutation = useCreateEvent();
   const [form, setForm] = useState<CreateEventFormState>(INITIAL_FORM_STATE);
@@ -68,6 +71,7 @@ const CreateEvent = () => {
     search: deferredVenueSearch || undefined,
   });
   const { data: selectedVenue } = useVenue(form.venueId || undefined);
+  const canManageEvents = canManageOrganizationOperations(org?.role);
 
   const venueOptions = useMemo(() => {
     const venues = new Map<string, Venue>();
@@ -219,14 +223,42 @@ const CreateEvent = () => {
           </div>
         </motion.div>
 
-        <motion.form
-          className="glass-panel space-y-8 p-6"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, delay: 0.2 }}
-          onSubmit={submitCreate}
-        >
-          <div className="grid gap-8 xl:grid-cols-[1.35fr_0.95fr]">
+        {!canManageEvents ? (
+          <motion.div
+            className="glass-panel space-y-4 p-6"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.2 }}
+          >
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">
+                Read-only access
+              </h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Your current role can review event operations but cannot create
+                new events or venues. Switch to an admin or member account to
+                continue.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => navigate('/events')}
+                className="inline-flex h-11 items-center justify-center rounded-full border border-white/[0.08] px-5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground"
+              >
+                Back to events
+              </button>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.form
+            className="glass-panel space-y-8 p-6"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.2 }}
+            onSubmit={submitCreate}
+          >
+            <div className="grid gap-8 xl:grid-cols-[1.35fr_0.95fr]">
             <section className="space-y-6">
               <div className="space-y-2">
                 <label
@@ -486,49 +518,50 @@ const CreateEvent = () => {
                 </div>
               </div>
             </aside>
-          </div>
-
-          <div className="flex flex-col gap-3 border-t border-white/[0.06] pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">
-              New events land in the management detail page immediately after
-              creation.
-            </p>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => navigate('/events')}
-                className="inline-flex h-11 items-center justify-center rounded-full border border-white/[0.08] px-5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground"
-                disabled={createEventMutation.isPending}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={createEventMutation.isPending}
-              >
-                {createEventMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Create Event
-              </button>
             </div>
-          </div>
 
-          <div className="rounded-2xl border border-primary/10 bg-primary/5 p-4 text-sm text-muted-foreground">
-            <div className="inline-flex items-center gap-2 font-medium text-foreground">
-              <CalendarPlus className="h-4 w-4 text-primary" />
-              First release scope
+            <div className="flex flex-col gap-3 border-t border-white/[0.06] pt-6 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                New events land in the management detail page immediately after
+                creation.
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => navigate('/events')}
+                  className="inline-flex h-11 items-center justify-center rounded-full border border-white/[0.08] px-5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground"
+                  disabled={createEventMutation.isPending}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={createEventMutation.isPending}
+                >
+                  {createEventMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Create Event
+                </button>
+              </div>
             </div>
-            <p className="mt-2">
-              This flow captures the core event record and keeps venue creation
-              close at hand, while deeper artist and team management still land
-              in later phases.
-            </p>
-          </div>
-        </motion.form>
+
+            <div className="rounded-2xl border border-primary/10 bg-primary/5 p-4 text-sm text-muted-foreground">
+              <div className="inline-flex items-center gap-2 font-medium text-foreground">
+                <CalendarPlus className="h-4 w-4 text-primary" />
+                First release scope
+              </div>
+              <p className="mt-2">
+                This flow captures the core event record and keeps venue
+                creation close at hand, while deeper artist and team management
+                still land in later phases.
+              </p>
+            </div>
+          </motion.form>
+        )}
       </AppShell>
       <VenueDialog
         open={isCreateVenueOpen}

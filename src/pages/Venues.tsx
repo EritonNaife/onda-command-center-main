@@ -22,6 +22,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useVenues } from '@/hooks/useVenues';
+import { canManageOrganizationOperations } from '@/lib/organizationAccess';
+import { useAuthStore } from '@/stores/authStore';
 import { Venue } from '@/types/venues';
 
 const PAGE_SIZE = 12;
@@ -47,6 +49,7 @@ function formatVenueLocation(venue: Venue): string {
 }
 
 const Venues = () => {
+  const org = useAuthStore((state) => state.org);
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const [isPending, startTransition] = useTransition();
@@ -69,6 +72,7 @@ const Venues = () => {
       data?.data.reduce((sum, venue) => sum + venue.event_count, 0) ?? 0,
     [data],
   );
+  const canManageVenues = canManageOrganizationOperations(org?.role);
 
   const changePage = (nextPage: number) => {
     startTransition(() => {
@@ -106,14 +110,20 @@ const Venues = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsCreateOpen(true)}
-              className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-              <Plus className="h-4 w-4" />
-              Add Venue
-            </button>
+            {canManageVenues ? (
+              <button
+                type="button"
+                onClick={() => setIsCreateOpen(true)}
+                className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4" />
+                Add Venue
+              </button>
+            ) : (
+              <span className="glass-pill text-xs font-medium text-muted-foreground">
+                Read-only access
+              </span>
+            )}
             <span className="glass-pill text-xs font-medium text-muted-foreground">
               <Building2 className="h-3.5 w-3.5" />
               {data?.meta.total ?? 0} venues
@@ -152,6 +162,13 @@ const Venues = () => {
             )}
           </div>
         </motion.div>
+
+        {!canManageVenues && (
+          <div className="mt-6 glass-panel p-4 text-sm text-muted-foreground">
+            Your current organization role can review venues but cannot create
+            or edit the venue directory.
+          </div>
+        )}
 
         {isLoading && (
           <div className="mt-6 glass-panel p-6 text-sm text-muted-foreground">
@@ -198,17 +215,27 @@ const Venues = () => {
                       <TableHead className="hidden text-right text-xs text-muted-foreground md:table-cell">
                         Events
                       </TableHead>
-                      <TableHead className="text-right text-xs text-muted-foreground">
-                        Actions
-                      </TableHead>
+                      {canManageVenues && (
+                        <TableHead className="text-right text-xs text-muted-foreground">
+                          Actions
+                        </TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {data.data.map((venue) => (
                       <TableRow
                         key={venue.id}
-                        className="cursor-pointer border-white/[0.05] transition-colors hover:bg-white/[0.03]"
-                        onClick={() => openEditVenue(venue.id)}
+                        className={`border-white/[0.05] transition-colors ${
+                          canManageVenues
+                            ? 'cursor-pointer hover:bg-white/[0.03]'
+                            : ''
+                        }`}
+                        onClick={() => {
+                          if (canManageVenues) {
+                            openEditVenue(venue.id);
+                          }
+                        }}
                       >
                         <TableCell className="align-top">
                           <div>
@@ -227,19 +254,21 @@ const Venues = () => {
                         <TableCell className="hidden align-top text-right text-sm font-medium text-foreground md:table-cell">
                           {venue.event_count}
                         </TableCell>
-                        <TableCell className="align-top text-right">
-                          <button
-                            type="button"
-                            onClick={(inputEvent) => {
-                              inputEvent.stopPropagation();
-                              openEditVenue(venue.id);
-                            }}
-                            className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground"
-                          >
-                            <PencilLine className="h-3.5 w-3.5" />
-                            Edit
-                          </button>
-                        </TableCell>
+                        {canManageVenues && (
+                          <TableCell className="align-top text-right">
+                            <button
+                              type="button"
+                              onClick={(inputEvent) => {
+                                inputEvent.stopPropagation();
+                                openEditVenue(venue.id);
+                              }}
+                              className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground"
+                            >
+                              <PencilLine className="h-3.5 w-3.5" />
+                              Edit
+                            </button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>

@@ -19,7 +19,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useEvents } from '@/hooks/useEvents';
+import { canManageOrganizationOperations } from '@/lib/organizationAccess';
 import { getEventRoute, isLiveEventStatus } from '@/lib/eventRouting';
+import { useAuthStore } from '@/stores/authStore';
 import { EventListItem, EventStatusFilter } from '@/types/events';
 import { useNavigate } from 'react-router-dom';
 
@@ -93,6 +95,7 @@ function getStatusBadgeClassName(status?: string): string {
 
 const Events = () => {
   const navigate = useNavigate();
+  const org = useAuthStore((state) => state.org);
   const [filter, setFilter] = useState<EventFilter>('all');
   const [page, setPage] = useState(1);
   const [isPending, startTransition] = useTransition();
@@ -110,6 +113,7 @@ const Events = () => {
 
   const liveCount =
     data?.data.filter((event) => isLiveEventStatus(event.status)).length ?? 0;
+  const canManageEvents = canManageOrganizationOperations(org?.role);
 
   const changeFilter = (nextFilter: EventFilter) => {
     startTransition(() => {
@@ -149,14 +153,20 @@ const Events = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => navigate('/events/new')}
-              className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-              <CalendarPlus className="h-4 w-4" />
-              Create Event
-            </button>
+            {canManageEvents ? (
+              <button
+                type="button"
+                onClick={() => navigate('/events/new')}
+                className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                <CalendarPlus className="h-4 w-4" />
+                Create Event
+              </button>
+            ) : (
+              <span className="glass-pill text-xs font-medium text-muted-foreground">
+                Read-only access
+              </span>
+            )}
             <span className="glass-pill text-xs font-medium text-muted-foreground">
               <Calendar className="h-3.5 w-3.5" />
               {data?.meta.total ?? 0} total
@@ -169,6 +179,13 @@ const Events = () => {
             )}
           </div>
         </motion.div>
+
+        {!canManageEvents && (
+          <div className="mb-6 glass-panel p-4 text-sm text-muted-foreground">
+            Your current organization role is read-only for event management.
+            Admins and members can create events and manage ticketing changes.
+          </div>
+        )}
 
         <motion.div
           className="glass-panel p-4"

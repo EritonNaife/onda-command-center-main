@@ -7,6 +7,7 @@ import Overview from "./pages/Overview";
 import Events from "./pages/Events";
 import EventDetail from "./pages/EventDetail";
 import CreateEvent from "./pages/CreateEvent";
+import Artists from "./pages/Artists";
 import Settings from "./pages/Settings";
 import Venues from "./pages/Venues";
 import Index from "./pages/Index";
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/" element={<Overview />} />
           <Route path="/events" element={<Events />} />
           <Route path="/events/new" element={<CreateEvent />} />
+          <Route path="/artists" element={<Artists />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/venues" element={<Venues />} />
           <Route path="/events/:eventId/detail" element={<EventDetail />} />
